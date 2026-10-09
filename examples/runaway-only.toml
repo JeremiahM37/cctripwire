@@ -1,0 +1,54 @@
+# cctripwire "runaway-only" preset: never limits normal work, only cuts off runaways.
+# `cctripwire setup` writes this file to ~/.config/cctripwire/config.toml.
+#
+# What it does NOT do:
+#   - no quota levels: nothing is warned, throttled, restricted or stopped because a
+#     window is filling up, and your prompts are never blocked;
+#   - loop detections (repeated tool calls, many subagents) are recorded for the dashboard
+#     but never deny a tool call or inject advice.
+#
+# What it does: a runaway breaker on headless `claude -p` runs. It trips when
+#   - more than `storm_max_queued` runs are waiting for a slot (a burst of parallel launches),
+#   - `storm_max_started` runs were launched within `storm_window_s`,
+#   - the exact 5-hour meter rises `surge_five_hour_pct` points within `surge_window_s`
+#     (needs an exact source: the status line or `usage_url`), or
+#   - `bypass_storm_max` claude -p processes run outside the gateway (needs the daemon).
+# While tripped, new claude -p calls fail at once (exit 77, costs nothing), running gateway
+# runs are paused (SIGSTOP, resumable), and the agent is told to stop and ask you.
+# Interactive sessions are never paused. Lift it with `cctripwire breaker reset`, or
+# `cctripwire breaker off --for 2h` before a deliberate big batch.
+
+rules = []
+
+[sources]
+# Exact quota comes from Claude Code's status line (`cctripwire setup` installs it).
+# Optionally also read a JSON usage endpoint you already run; see docs/usage-url.md.
+usage_url = ""
+usage_url_interval_s = 60
+
+[hooks]
+block_prompts_at_stop = false
+enforce_loops = false
+
+[gateway]
+max_concurrency = 10       # parallel claude -p beyond this queue (not fail)
+max_depth = 3              # claude -p inside claude -p inside claude -p
+max_children = 10
+spawn_rate_per_min = 60
+max_duplicates = 0         # identical prompts are fine (evals repeat prompts)
+queue_timeout_s = 1800
+storm_max_queued = 20      # 10 running + 20 waiting = burst of 30 trips it
+storm_max_started = 40     # 40 launches in 10 minutes trips it
+storm_window_s = 600
+storm_cooloff_s = 0        # stays tripped until you reset it
+storm_observe = false      # true: only record + notify would-trips (try this first on a busy machine)
+storm_pause_running = true
+surge_five_hour_pct = 5    # 5-hour meter +5 points within 10 minutes
+surge_seven_day_pct = 3    # weekly meter +3 points within 10 minutes
+surge_window_s = 600
+
+[daemon]
+interval_s = 15
+pause_on_stop = true
+bypass_storm_max = 15      # 15 claude -p processes outside the gateway at once
+# notify_command = "sh -c 'curl -s -d \"$CCTRIPWIRE_BODY\" https://ntfy.sh/your-topic'"

@@ -1,0 +1,18 @@
+# systemd --user unit for the cctripwire daemon.
+# Install: copy to ~/.config/systemd/user/, adjust ExecStart to where `cctripwire` is
+# installed (user services do not inherit your shell PATH), then:
+#   systemctl --user daemon-reload && systemctl --user enable --now cctripwire
+[Unit]
+Description=cctripwire: Claude Code runaway breaker daemon
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/cctripwire daemon --dashboard
+Restart=on-failure
+RestartSec=5
+# Background work only: yield CPU to interactive Claude Code sessions.
+Nice=10
+
+[Install]
+WantedBy=default.target

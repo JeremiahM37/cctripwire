@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="cctripwire"><defs><linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd23f"/><stop offset=".55" stop-color="#ff8a1f"/><stop offset="1" stop-color="#ff3b5c"/></linearGradient></defs><rect x="1.5" y="1.5" width="125" height="125" rx="29" fill="#0f1522"/>
+<g stroke="#e8edf5" stroke-width="8" stroke-linecap="round"><path d="M22 66 H47"/><path d="M83 66 H106"/></g>
+<circle cx="18" cy="66" r="8" fill="#e8edf5"/><circle cx="110" cy="66" r="8" fill="#e8edf5"/>
+<path d="M75 16 L45 72 H62 L53 114 L86 56 H69 L82 16 Z" fill="url(#bolt)" stroke="#0f1522" stroke-width="4" stroke-linejoin="round"/></svg>

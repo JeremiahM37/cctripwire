@@ -1,0 +1,41 @@
+# verify v0.2 schema. Run `verify` from this directory.
+backend: web
+
+launch:
+  command: scripts/verify-dashboard.sh
+  url: http://127.0.0.1:8398/
+  ready_when: { url: "http://127.0.0.1:8398/api/status", timeout: 30 }
+
+options:
+  web:
+    headless: true
+    viewport: [414, 896]
+
+steps:
+  - name: full test suite (fake claude, mock quota, no network)
+    actions:
+      - shell: { cmd: ".venv/bin/python -m pytest -q", timeout: 300 }
+      - shell: "! pgrep -f '[t]ests/fake_claude.py'"
+
+  - name: example config is valid
+    actions:
+      - shell: "CCTRIPWIRE_HOME=$(mktemp -d) .venv/bin/cctripwire --config examples/config.toml config validate"
+
+  - name: dashboard API reports the seeded STOP state as exact
+    actions:
+      - shell: >
+          curl -sf http://127.0.0.1:8398/api/status | python3 -c 'import json,sys; d=json.load(sys.stdin);
+          w={x["window"]:x for x in d["windows"]}; assert d["level"]=="stop", d["level"];
+          assert w["five_hour"]["used_pct"]==96 and w["five_hour"]["exact"]; print("ok")'
+      - shell: "curl -sf 'http://127.0.0.1:8398/api/history?hours=24' | python3 -c 'import json,sys; json.load(sys.stdin)'"
+      - shell: "for p in loops interventions processes limits; do curl -sf http://127.0.0.1:8398/api/$p >/dev/null || exit 1; done"
+
+  - name: dashboard renders on a phone
+    actions:
+      - navigate: http://127.0.0.1:8398/
+      - wait: 2
+    expect:
+      vision: >
+        a light or dark dashboard titled "cctripwire" with a prominent STOP level banner,
+        a 5 h window card showing 96% marked "exact" and a 7 day window card showing 61%;
+        content fits the phone width without being cut off; no error text or blank page

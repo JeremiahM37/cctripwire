@@ -1,0 +1,61 @@
+# Example cctripwire config: unattended agent fleet on a Max plan.
+# Copy to ~/.config/cctripwire/config.toml (or point $CCTRIPWIRE_CONFIG at it).
+# Every key is optional; see `cctripwire limits` for the effective values.
+
+# Top-level keys must come before the first [table].
+extend_rules = true            # add the [[rules]] below to the defaults instead of replacing them
+
+[general]
+stale_after_s = 900            # exact readings older than this fall back to estimates
+
+[sources]
+statusline = true
+oauth = false                  # undocumented endpoint: opt in only if you accept that it may break
+
+[gateway]
+max_concurrency = 3            # simultaneous `claude -p` across ALL sessions
+max_depth = 2                  # claude -p -> claude -p, no deeper
+max_children = 3               # live children per parent
+spawn_rate_per_min = 10
+per_invocation_tokens = 2e6    # weighted tokens; kill (exit 78) beyond this
+per_invocation_max_turns = 60  # passed as --max-turns unless the caller set one
+queue_timeout_s = 1800
+on_stop = "deny"               # or "wait": queue new work until the level drops below STOP
+
+[loops]
+tool_failure_threshold = 4
+no_progress_calls = 40
+
+[levels.restrict]
+deny_tools = ["Agent", "Task", "Workflow", "WebSearch", "WebFetch"]
+downgrade_model = "haiku"
+
+[levels.stop]
+checkpoint_tool_calls = 3
+checkpoint_file = "CHECKPOINT.md"
+
+[daemon]
+interval_s = 15
+pause_on_stop = true           # SIGSTOP gateway work at STOP (after writing a checkpoint)
+auto_resume = true
+enforce_bypass = false         # also SIGSTOP claude -p processes that bypass the gateway
+# Run without a shell; title/body arrive as $CCTRIPWIRE_TITLE / $CCTRIPWIRE_BODY in the environment.
+notify_command = "sh -c 'notify-send \"$CCTRIPWIRE_TITLE\" \"$CCTRIPWIRE_BODY\"'"
+
+# The [[rules]] below are added to the default rules (see the top of the file).
+[[rules]]
+name = "weekly-eta"
+when = "seven_day.eta_s < 6 * 3600 and seven_day.used_pct >= 60"
+level = "restrict"
+message = "weekly allowance predicted to run out within 6 hours"
+
+# Per-project budgets in weighted tokens over the current 5-hour window.
+[budgets.projects.nightly-refactor]
+soft_weighted = 5e6
+hard_weighted = 1e7
+max_concurrency = 1
+per_invocation_tokens = 5e5
+
+[budgets.agents.research-swarm]
+hard_weighted = 2e7
+max_concurrency = 2
