@@ -12,6 +12,7 @@ from .models import FIVE_HOUR, SEVEN_DAY, Level
 
 KEY = "breaker"            # {"tripped_at", "until", "reason"} while tripped
 OFF_KEY = "breaker_off"    # {"until"}: user lifted the breaker for a while
+RESET_KEY = "breaker_reset_at"   # launches before the last reset do not count again
 OBSERVED_KEY = "breaker_observed"   # {"at", "reason"}: last would-trip in observe mode
 ADVICE = ("Stop launching claude -p and tell the user. Only the user can lift this "
           "(`cctripwire breaker reset`).")
@@ -20,7 +21,8 @@ ADVICE = ("Stop launching claude -p and tell the user. Only the user can lift th
 def enabled(cfg) -> bool:
     return any(float(cfg.get(k, 0) or 0) for k in (
         "gateway.storm_max_queued", "gateway.storm_max_started",
-        "gateway.surge_five_hour_pct", "gateway.surge_seven_day_pct", "daemon.bypass_storm_max"))
+        "gateway.surge_five_hour_pct", "gateway.surge_seven_day_pct", "daemon.bypass_storm_max",
+        "daemon.bypass_storm_started"))
 
 
 def surge(store, cfg, now: float | None = None) -> str | None:
@@ -43,6 +45,35 @@ def surge(store, cfg, now: float | None = None) -> str | None:
             mins = max(1, round((last.ts - low.ts) / 60))
             return (f"surge: {label} usage rose {rise:g} points in {mins} min "
                     f"({low.used_pct:g}% -> {last.used_pct:g}%)")
+    return None
+
+
+def _since(store, win: float, now: float) -> float:
+    """Start of the launch-counting window: storm_window_s back, but never before the last
+    reset or the end of a lift, so launches the user already cleared cannot re-trip it."""
+    floor = now - win
+    for value in (store.kv_get(RESET_KEY), (store.kv_get(OFF_KEY) or {}).get("until")):
+        try:
+            if value is not None and float(value) <= now:
+                floor = max(floor, float(value))
+        except (TypeError, ValueError):
+            pass
+    return floor
+
+
+def bypass_rate(store, cfg, now: float | None = None) -> str | None:
+    """A reason when too many claude -p processes were started outside the gateway within
+    storm_window_s. The daemon samples processes, so short runs can be missed: the count is a
+    lower bound."""
+    now = util.now() if now is None else now
+    limit = int(cfg.get("daemon.bypass_storm_started", 0) or 0)
+    if limit <= 0:
+        return None
+    win = float(cfg.get("gateway.storm_window_s", 600) or 600)
+    n = store.conn.execute("SELECT COUNT(*) FROM detections WHERE kind='gateway_bypass' AND ts>=?",
+                           (_since(store, win, now),)).fetchone()[0]
+    if n >= limit:
+        return f"{n} claude -p runs launched outside the gateway in {util.fmt_duration(win)}"
     return None
 
 
@@ -126,7 +157,7 @@ def _storm(store, cfg, now: float) -> tuple[str | None, bool]:
     if max_s:
         win = float(cfg.get("gateway.storm_window_s", 600) or 600)
         n = c.execute("SELECT COUNT(*) FROM invocations WHERE created>=? AND status<>'denied'",
-                      (now - win,)).fetchone()[0]
+                      (_since(store, win, now),)).fetchone()[0]
         if n >= max_s:
             return f"{n} claude -p runs launched in {util.fmt_duration(win)}", True
     why = surge(store, cfg, now)
@@ -135,6 +166,7 @@ def _storm(store, cfg, now: float) -> tuple[str | None, bool]:
 
 def reset(store) -> None:
     store.kv_set(KEY, None)
+    store.kv_set(RESET_KEY, util.now())
     store.add_intervention("breaker_reset", "gateway", "breaker reset by user")
 
 

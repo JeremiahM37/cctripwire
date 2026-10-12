@@ -12,7 +12,8 @@
 #   - `storm_max_started` runs were launched within `storm_window_s`,
 #   - the exact 5-hour meter rises `surge_five_hour_pct` points within `surge_window_s`
 #     (needs an exact source: the status line or `usage_url`), or
-#   - `bypass_storm_max` claude -p processes run outside the gateway (needs the daemon).
+#   - `bypass_storm_max` claude -p processes run outside the gateway at once, or
+#     `bypass_storm_started` were launched there within `storm_window_s` (needs the daemon).
 # While tripped, new claude -p calls fail at once (exit 77, costs nothing), running gateway
 # runs are paused (SIGSTOP, resumable), and the agent is told to stop and ask you.
 # Interactive sessions are never paused. Lift it with `cctripwire breaker reset`, or
@@ -51,4 +52,5 @@ surge_window_s = 600
 interval_s = 15
 pause_on_stop = true
 bypass_storm_max = 15      # 15 claude -p processes outside the gateway at once
+bypass_storm_started = 40  # 40 launches outside the gateway in 10 minutes (a serial storm)
 # notify_command = "sh -c 'curl -s -d \"$CCTRIPWIRE_BODY\" https://ntfy.sh/your-topic'"

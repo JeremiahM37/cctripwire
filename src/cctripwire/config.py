@@ -131,6 +131,8 @@ DEFAULTS: dict = {
         "notify_command": "",        # run (no shell) on level changes; $CCTRIPWIRE_TITLE / $CCTRIPWIRE_BODY
         "bypass_storm_max": 0,       # trip the breaker (and SIGSTOP them) at this many claude -p
                                      # processes running outside the gateway; 0 = off
+        "bypass_storm_started": 0,   # trip at this many claude -p launches outside the gateway
+                                     # within gateway.storm_window_s; 0 = off
     },
 }
 

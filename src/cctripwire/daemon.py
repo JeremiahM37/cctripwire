@@ -302,6 +302,8 @@ def _step_breaker(ctx: dict) -> None:
             if len(found) >= limit:
                 why = f"{len(found)} claude -p processes running outside the gateway"
         if why is None:
+            why = breaker.bypass_rate(store, cfg, t)
+        if why is None:
             return
         rec = breaker.trip(store, cfg, why, t)
         if rec.get("observed"):
@@ -314,7 +316,7 @@ def _step_breaker(ctx: dict) -> None:
     reason = f"breaker: {rec.get('reason')}"
     for inv in store.invocations(status="running", limit=10000):
         iv.request(store, inv["id"], "suspend", reason=reason, level=Level.STOP)
-    if int(cfg.get("daemon.bypass_storm_max", 0) or 0):
+    if any(int(cfg.get(k, 0) or 0) for k in ("daemon.bypass_storm_max", "daemon.bypass_storm_started")):
         procs = _optional("procs")
         if found is None:
             found = list(procs.bypassers(procs.list_claude_processes()) or [])

@@ -77,11 +77,12 @@ Check everything with `cctripwire doctor`. Undo everything with `cctripwire tear
 | **Real Claude Code** (2.1.295): 40 parallel `claude -p --model opus` from a shell loop | 2 ran, **38 refused**, whole storm over in **9 s** |
 | **Incident replay**: an agent asked to script 30 parallel Opus evals | 2 ran, 28 refused. The agent read the refusal, did not retry or work around it, and told the user to run `cctripwire breaker reset`. Agent cost: **$0.008** |
 | **Usage surge**: the exact 5-hour meter jumps 30 % → 36 % | breaker tripped on the next daemon tick |
+| **Four days in observe mode** on a machine running about 10 agents | flagged one real storm (about 3,800 headless runs from a benchmark, which took the 5-hour meter to 95 %) and nothing else |
 | `cctripwire demo`: 200 parallel launches against a stand-in `claude` | 10 ran, **190 refused** in 3.2 s |
 | Hook overhead per tool call | p50 **53 ms** (cctripwire logic itself: 0.13 ms) |
 | Gateway overhead per `claude -p` | p50 62 ms |
 | Runtime dependencies | **0** (Python standard library, one SQLite file) |
-| Tests | 289, using a fake `claude` binary and mocked quota, with no network |
+| Tests | 291, using a fake `claude` binary and mocked quota, with no network |
 
 Method and raw numbers: [docs/results/RESULTS.md](docs/results/RESULTS.md) and
 [benchmarks.md](docs/results/benchmarks.md). The live drills ran in throwaway sandboxes with
@@ -96,6 +97,7 @@ every child forced onto Haiku. All of them together cost about $0.53 at list pri
 | exact 5-hour usage rising within 10 minutes | +5 points |
 | exact weekly usage rising within 10 minutes | +3 points |
 | `claude -p` processes running outside the shim (daemon) | 15 at once |
+| `claude -p` runs launched outside the shim within 10 minutes (daemon) | 40 |
 
 Ordinary work never gets near these numbers. A person, or an agent doing normal things, starts
 a handful of headless runs. The preset never warns, throttles, restricts or blocks anything

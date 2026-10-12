@@ -2,7 +2,7 @@
 
 ## Automated tests
 
-`python -m pytest -q`: **289 passed** in about 40 s. No real `claude` and no network are involved:
+`python -m pytest -q`: **291 passed** in about 40 s. No real `claude` and no network are involved:
 `tests/fake_claude.py` stands in for the binary and quota is mocked.
 
 | Requirement | Where it is tested |

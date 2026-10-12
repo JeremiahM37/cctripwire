@@ -79,6 +79,10 @@ These are things cctripwire cannot see or cannot stop, and how much each one mat
 - **The bypass trigger SIGSTOPs processes it did not start.** It applies to `claude -p`
   processes outside the gateway (absolute path, `CCTRIPWIRE_DISABLE=1`). Set `bypass_storm_max`
   above the number of headless runs your tools legitimately keep alive at once.
+- **Launches outside the gateway are sampled, not counted exactly.** The daemon looks every
+  15 seconds, so `bypass_storm_started` misses runs shorter than that and the real number of
+  launches is higher than the one it reports. New launches outside the gateway are not refused
+  while the breaker is tripped; they are paused on the next daemon tick.
 - **An agent can wait for a reset.** It can also batch work below the queue limit. The launch
   window limit (`storm_max_started`) caps that throughput.
 

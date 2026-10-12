@@ -261,6 +261,52 @@ def test_daemon_trips_on_bypass_storm_and_freezes_them(st, monkeypatch):
     assert breaker.tripped(st.store) is None and not sent
 
 
+def test_daemon_trips_on_serial_storm_outside_the_gateway(st, monkeypatch):
+    """A script that runs claude -p by absolute path a few at a time never piles up, but the
+    launches add up. Seen live: about 100 launches per 10 minutes, never more than 8 at once."""
+    import signal as _signal
+    from cctripwire import procs
+    cfg = Config({"general": {"state_dir": str(st.dir)},
+                  "daemon": {"bypass_storm_max": 15, "bypass_storm_started": 10}})
+    for name in ("scan", "reap"):
+        monkeypatch.setattr(daemon, f"_step_{name}", lambda ctx: None)
+    live: list = []
+    monkeypatch.setattr(procs, "list_claude_processes", lambda: live)
+    monkeypatch.setattr(procs, "bypassers", lambda ps: list(ps))
+    sent = []
+    monkeypatch.setattr(daemon.os, "kill", lambda pid, sig: sent.append((pid, sig)))
+    now = util.now()
+    for i in range(4):                      # 3 new processes per tick, 3 alive at a time
+        live[:] = [SimpleNamespace(pid=200000 + 3 * i + j, start_time=i) for j in range(3)]
+        daemon.tick(cfg, st.store, now=now + 15 * i)
+        if i < 3:
+            assert breaker.tripped(st.store, now + 15 * i) is None, f"tripped early on tick {i}"
+    rec = breaker.tripped(st.store, now + 45)
+    assert rec and "12 claude -p runs launched outside the gateway" in rec["reason"]
+    assert sorted(p for p, s in sent if s == _signal.SIGSTOP) == [p.pid for p in live]
+    # After a reset the same launches do not count again; a few more do not re-trip it.
+    breaker.reset(st.store)
+    st.store.kv_set(daemon.BYPASS_PAUSED_KEY, [])
+    later = util.now() + 1
+    live[:] = [SimpleNamespace(pid=300000 + j, start_time=9) for j in range(3)]
+    daemon.tick(cfg, st.store, now=later)
+    assert breaker.tripped(st.store, later) is None
+
+
+def test_long_running_processes_outside_the_gateway_count_once(st, monkeypatch):
+    from cctripwire import procs
+    cfg = Config({"general": {"state_dir": str(st.dir)}, "daemon": {"bypass_storm_started": 5}})
+    for name in ("scan", "reap"):
+        monkeypatch.setattr(daemon, f"_step_{name}", lambda ctx: None)
+    live = [SimpleNamespace(pid=400000 + j, start_time=1) for j in range(3)]
+    monkeypatch.setattr(procs, "list_claude_processes", lambda: live)
+    monkeypatch.setattr(procs, "bypassers", lambda ps: list(ps))
+    now = util.now()
+    for i in range(10):
+        daemon.tick(cfg, st.store, now=now + 15 * i)
+    assert breaker.tripped(st.store, now + 150) is None
+
+
 # -- observe mode ----------------------------------------------------------------------
 
 def test_observe_mode_gateway_never_refuses(make_env):
